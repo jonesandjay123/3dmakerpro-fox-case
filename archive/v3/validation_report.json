@@ -1,5 +1,5 @@
 {
-  "version": "V4",
+  "version": "V3",
   "parameters": {
     "FOX_CAVITY_LENGTH": 115.5,
     "FOX_CAVITY_WIDTH": 73.0,
@@ -12,19 +12,34 @@
       5.0
     ],
     "FLOOR": 2.0,
-    "CRADLE_HEIGHT": 8.0,
+    "CRADLE_H": 8.0,
     "WALL": 2.0,
-    "TOWER_HEIGHT": 20.0,
     "LID_WALL": 2.4,
-    "LID_TOP": 2.4,
     "LID_CLEARANCE": 0.35,
-    "FINGER_WINDOW_LENGTH": 102.0,
+    "LID_TOP": 2.0,
+    "LID_TOP_GAP": 1.0,
+    "WINDOW_STUB": 1.5,
     "WINDOW_FILLET": 3.0,
-    "RETENTION_ENGAGEMENT": 0.4,
+    "LIP_H": 2.5,
+    "LIP_T": 1.2,
+    "TRAY_CLEARANCE": 0.3,
+    "TRAY_FLOOR": 1.6,
+    "ACCESSORY_ENVELOPE": [
+      172.0,
+      56.0,
+      52.0
+    ],
+    "CHARGER": [
+      52.0,
+      56.0,
+      52.0
+    ],
+    "ACCESSORY_TRAY_HEIGHT": 56.0,
     "LID_RETENTION": {
       "tab_width": 10.0,
       "tab_length": 20.0,
       "slot": 1.0,
+      "engage": 0.4,
       "bump_z": 1.2,
       "insert_angle": 30.0,
       "release_angle": 45.0,
@@ -37,16 +52,16 @@
     "CH_GROOVE": 1.0,
     "CH_LID_TOP": 1.2,
     "CH_LID_MOUTH": 0.8,
-    "TOWER_LEADIN": 0.8,
+    "LIP_LEADIN": 0.6,
     "SEG": 16,
     "A1_MINI_BED": [
       180.0,
       180.0,
       180.0
     ],
-    "PLATE_GAP": 5.0,
+    "PLATE_GAP": 8.0,
     "PLA_DENSITY": 1.24,
-    "V3_HEIGHT": 99.1,
+    "V2_HEIGHT": 130.54,
     "CAV_L": 115.5,
     "CAV_W": 73.0,
     "CAV_R": 5.25,
@@ -57,35 +72,47 @@
     "OUT_W": 82.5,
     "OUT_R": 10.0,
     "Z_CRADLE": 10.0,
-    "Z_TOWER": 22.0,
-    "Z_CEIL": 38.5,
-    "Z_TOP": 40.9,
-    "TOTAL_CASE_HEIGHT": 40.9,
-    "WINDOW_HALF": 51.0,
-    "WINDOW_STUB": 1.5
+    "Z_SEAT": 38.5,
+    "TRAY_INSET": 1.5,
+    "TRAY_L": 116.5,
+    "TRAY_W": 74.0,
+    "TRAY_R": 5.75,
+    "TRAY_H": 57.6,
+    "Z_TRAY_TOP": 96.1,
+    "Z_LID_CEIL": 97.1,
+    "Z_TOP": 99.1,
+    "TOTAL_CASE_HEIGHT": 99.1,
+    "WINDOW_HALF": 51.0
   },
   "derived": {
     "case_outer_mm": [
       125.0,
       82.5,
-      40.9
+      99.1
     ],
-    "height_change_vs_v3_mm": -58.2,
+    "height_change_vs_v2_mm": -31.44,
     "fox_cavity_mm": [
       115.5,
       73.0,
       "R5.25"
     ],
     "fox_internal_height_mm": 36.5,
-    "cradle_capture_height_mm": 8.0,
+    "tray_inner_mm": [
+      112.5,
+      70.0,
+      56.0,
+      "R3.75"
+    ],
+    "tray_inner_volume_cm3": 440.3,
     "finger_window_length_mm": 102.0,
-    "tower_stub_mm": 1.5,
     "z_levels_mm": {
       "floor_top": 2.0,
       "cradle_top_and_lid_mouth": 10.0,
-      "tower_top": 22.0,
-      "lid_ceiling": 38.5,
-      "case_top": 40.9
+      "tray_underside": 38.5,
+      "tray_floor_top": 40.1,
+      "tray_top": 96.1,
+      "lid_ceiling": 97.1,
+      "case_top": 99.1
     }
   },
   "parts": {
@@ -93,12 +120,12 @@
       "nonmanifold_edges": 0,
       "islands": 1,
       "self_intersections": 0,
-      "volume_cm3": 38.75,
-      "pla_g_solid_est": 48.1,
+      "volume_cm3": 44.91,
+      "pla_g_solid_est": 55.7,
       "size_print_mm": [
         125.0,
         82.5,
-        22.0
+        41.0
       ],
       "fits_a1_mini": true,
       "first_layer_contact_mm2": 9989.0,
@@ -106,18 +133,37 @@
       "bridge_area_mm2": 0,
       "bridge_span_mm": null,
       "support_free": true,
-      "wall_thickness_p1_mm": 2.0
+      "wall_thickness_p1_mm": 1.2
+    },
+    "tray": {
+      "nonmanifold_edges": 0,
+      "islands": 1,
+      "self_intersections": 0,
+      "volume_cm3": 54.49,
+      "pla_g_solid_est": 67.6,
+      "size_print_mm": [
+        116.5,
+        74.0,
+        57.6
+      ],
+      "fits_a1_mini": true,
+      "first_layer_contact_mm2": 8371.0,
+      "overhang_steeper_than_45deg_mm2": 0.0,
+      "bridge_area_mm2": 0,
+      "bridge_span_mm": null,
+      "support_free": true,
+      "wall_thickness_p1_mm": 1.6
     },
     "lid": {
       "nonmanifold_edges": 0,
       "islands": 1,
       "self_intersections": 0,
-      "volume_cm3": 50.45,
-      "pla_g_solid_est": 62.6,
+      "volume_cm3": 101.24,
+      "pla_g_solid_est": 125.5,
       "size_print_mm": [
         125.0,
         82.5,
-        30.9
+        89.1
       ],
       "fits_a1_mini": true,
       "first_layer_contact_mm2": 9753.0,
@@ -125,7 +171,7 @@
       "bridge_area_mm2": 0,
       "bridge_span_mm": null,
       "support_free": true,
-      "wall_thickness_p1_mm": 2.4
+      "wall_thickness_p1_mm": 2.0
     },
     "fit_test": {
       "nonmanifold_edges": 0,
@@ -147,15 +193,14 @@
       "wall_thickness_p1_mm": 2.0
     }
   },
-  "measured": {
-    "cavity_length_mm": 115.5,
-    "cavity_width_mm": 73.0,
-    "floor_to_lid_ceiling_mm": 36.5,
-    "fox_proxy_top_clearance_mm": 1.5
+  "tray_divider_check": {
+    "rays": 568,
+    "rays_blocked_above_floor": 0,
+    "divider_free": true
   },
   "lid_retention": {
     "type": "2 cantilever snap tabs in the lid short ends + matching grooves in the base towers",
-    "engagement_mm": 0.4,
+    "bump_overlap_with_tower_face_mm": 0.4,
     "closed_bump_sits_in_groove_without_clash": true,
     "tab_radial_force_N": 6.0,
     "close_force_total_N": 12.8,
@@ -163,43 +208,57 @@
     "tab_root_strain_pct": 0.36
   },
   "assembly": {
+    "clash_base_tray(resting)": false,
     "clash_base_lid(resting)": false,
+    "clash_tray_lid": false,
     "clash_fox_base(resting)": false,
+    "clash_fox_tray": false,
     "clash_fox_lid": false,
+    "clash_charger_tray(resting)": false,
+    "clash_cable_tray(resting)": false,
+    "clash_charger_lid": false,
+    "clash_charger_cable": false,
     "clash_sensor_face_base": false,
-    "lid_presses_on_fox": false,
     "gap_fox_proxy_side_to_cradle_mm": 0.3,
-    "gap_fox_proxy_top_to_lid_mm": 1.5,
-    "gap_fox_proxy_to_lid_any_mm": 1.5,
-    "gap_tower_top_to_lid_ceiling_mm": 16.5,
+    "gap_fox_proxy_top_to_tray_mm": 1.5,
+    "gap_tray_top_to_lid_mm": 1.0,
+    "gap_charger_top_to_lid_mm": 4.85,
     "gap_sensor_face_to_base_mm": 0.67,
     "gap_sensor_face_to_lid_mm": 2.45
   },
-  "one_plate": {
-    "layout": "base (upright) and lid (upside down) side by side, no nesting",
-    "bbox_min": [
-      27.5,
-      5.0,
-      -0.0
-    ],
-    "bbox_max": [
-      152.5,
-      175.0,
-      30.9
-    ],
-    "footprint_mm": [
-      125.0,
-      170.0
-    ],
-    "fits_bed": true,
-    "clash_on_plate": false,
-    "gap_between_parts_mm": 5.0
+  "plates": {
+    "plate_A_base_and_tray": {
+      "bbox_min": [
+        27.5,
+        3.5,
+        0.0
+      ],
+      "bbox_max": [
+        152.5,
+        168.0,
+        57.6
+      ],
+      "fits_bed": true
+    },
+    "plate_B_lid": {
+      "bbox_min": [
+        27.5,
+        48.7,
+        0.0
+      ],
+      "bbox_max": [
+        152.5,
+        131.2,
+        89.1
+      ],
+      "fits_bed": true
+    }
   },
   "material": {
-    "solid_equivalent_g": 110.7,
+    "solid_equivalent_g": 248.8,
     "expected_sliced_g_3walls_15pct": [
-      89,
-      102
+      194,
+      224
     ]
   }
 }

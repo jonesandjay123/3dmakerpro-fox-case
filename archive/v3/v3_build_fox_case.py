@@ -1,76 +1,98 @@
 """
-3DMakerpro FOX scanner case - V4 "scanner-only, low profile" parametric build (Blender 5.1.2).
+3DMakerpro FOX carrying case - V3 "compact" parametric build script for Blender (5.1.2).
 
 Run either way:
   * Blender MCP / Text Editor:  exec(open("<repo>/scripts/build_fox_case.py").read())
   * Headless:  /Applications/Blender.app/Contents/MacOS/Blender -b --python scripts/build_fox_case.py
-  * Full pipeline incl. renders: scripts/run_all.py
 
 Units: 1 Blender unit = 1 mm. Everything is rebuilt from the parameters below.
 
-Architecture (V4 - the FOX only; cable/charger stay in the original box for now):
-    LID  : low sleeve, flat top, 2 snap tabs on the short ends
-    FOX  : lies flat in a shallow cradle; long sides open above CRADLE_HEIGHT for fingers
-    BASE : floor + 10 mm band + two low C-shaped end towers (lid guide + snap grooves)
-Both parts print in ONE job on one Bambu A1 mini plate, support-free.
+Architecture (stacked, see docs/design.md):
+    LID  (slip-over sleeve, flat top, 2 snap tabs on the short ends)
+    TRAY (ONE open accessory bin - deliberately NO divider - on the base end towers)
+    FOX  (lies flat in a shallow cradle; long sides open above CRADLE_H for fingers)
+    BASE (floor + band + two C-shaped end towers that carry the tray)
+
+V3 drivers: physically fit-tested FOX cavity (115.5 x 73.0), 36.5 mm FOX space,
+user-measured accessory envelope, minimum total height. Two print jobs are fine
+(V2's one-plate constraint and the cardboard-box volume target are dropped).
 """
 import bpy, bmesh, math, os, json, zipfile, struct
 from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
 
-VERSION = "V4"
+VERSION = "V3"
 
 # ----------------------------------------------------------------------------
 # PARAMETERS (mm)
 # ----------------------------------------------------------------------------
-# FOX cavity - settled by the physical fit test of the printed ring (V2 ring 115.5 x 72.5:
-# length OK with ~1 mm play; width lightly gripped -> widened to 73.0 in V3; corners good).
+# FOX cavity - PHYSICALLY FIT-TESTED with the printed V2 ring:
+#   115.5 long : ~1 mm total free play            -> keep
+#   72.5 wide  : fitted but lightly gripped        -> +0.5 -> 73.0
+#   R 5.25     : corners behaved well              -> keep
 FOX_CAVITY_LENGTH = 115.5
 FOX_CAVITY_WIDTH = 73.0
 FOX_CAVITY_R = 5.25
-FOX_INTERNAL_HEIGHT = 36.5   # clear height: base floor top -> lid ceiling (measured requirement)
+FOX_INTERNAL_HEIGHT = 36.5   # clear height: base floor top -> tray underside (measured requirement)
 
-# Stand-in FOX body for clearance checks / renders only (inferred from the ring test).
-FOX_PROXY = (114.4, 72.4, 35.0, 5.0)   # L, W, H, plan corner R
+# Stand-in FOX body for clearance checks / renders only (not a design input),
+# inferred from the ring test: ~1 mm total play in length, ~0 in width at 72.5.
+FOX_PROXY = (114.4, 72.4, 35.0, 5.0)   # L, W, H, plan corner R (corners fit well in the test)
 
 FLOOR = 2.0
-CRADLE_HEIGHT = 8.0          # long-side capture height above the floor (validated in the ring test)
-WALL = 2.0                   # base tower walls
-TOWER_HEIGHT = 20.0          # end towers above the floor: lid guide + snap grooves (not a tray seat)
+CRADLE_H = 8.0            # long-side capture height (worked in the ring test)
+WALL = 2.0                # base tower walls and tray walls
 LID_WALL = 2.4
-LID_TOP = 2.4                # printed on the bed; 2.4 keeps a hand-press well clear of the FOX
-LID_CLEARANCE = 0.35         # per side, lid sleeve -> base towers
-FINGER_WINDOW_LENGTH = 102.0 # open length of each long side above the cradle band
-WINDOW_FILLET = 3.0          # small, keeps the window corners clear of the lens window ends
+LID_CLEARANCE = 0.35      # per side, lid sleeve -> base towers
+LID_TOP = 2.0
+LID_TOP_GAP = 1.0         # tray rim -> lid ceiling (limits tray lift)
 
-# Lid retention: 2 cantilever snap tabs cut into the lid's short end walls; an inward bump
-# on each tab clicks into a groove in the base tower end wall.
-RETENTION_ENGAGEMENT = 0.4   # radial overlap bump <-> tower face (the "click")
+WINDOW_STUB = 1.5         # tower stub past the corner arc; short, so the lens window
+                          # (|x| < ~49 mm) faces open air - the FOX only has ~0.3 mm side play
+WINDOW_FILLET = 3.0       # finger-window bottom corner radius (small: keeps clear of the lens window ends)
+
+LIP_H = 2.5               # tray-locating lips on tower tops
+LIP_T = 1.2
+TRAY_CLEARANCE = 0.3      # per side, tray -> lips
+TRAY_FLOOR = 1.6
+
+# Accessories (user measurement): charger ~56 wide x 52 tall; charger + cable laid flat
+# in a row need ~56 x 52 x 172. User decision: keep the 125 x 82 footprint (the 172 mm
+# run is NOT reproduced) - ONE open bin, deliberately NO divider; the charger sits at one
+# end and the cable is coiled freely in the remaining space. Inner depth ~56 (55-58 ok)
+# gives a 52 mm charger sensible headroom; target total height ~98-100 mm.
+ACCESSORY_ENVELOPE = (172.0, 56.0, 52.0)   # as measured laid flat (reference only)
+CHARGER = (52.0, 56.0, 52.0)               # proxy: X (depth, assumed), Y (width), Z (height)
+ACCESSORY_TRAY_HEIGHT = 56.0               # usable inner depth
+
+# Lid retention: 2 cantilever snap tabs cut into the lid's short end walls; an inward
+# bump on each tab clicks into a groove on the base tower end wall.
 LID_RETENTION = dict(
-    tab_width=10.0,          # tab width (Y)
-    tab_length=20.0,         # free length from the lid mouth up to the tab root
-    slot=1.0,                # slot width either side of the tab
-    bump_z=1.2,              # bump starts this far above the lid mouth
-    insert_angle=30.0,       # lower ramp, deg from vertical (easy closing)
-    release_angle=45.0,      # upper ramp, deg from vertical (= steepest support-free face)
-    crest=0.6,               # flat crest height of the bump
-    groove_clear=0.2,        # extra groove size around the bump
+    tab_width=10.0,        # tab width (Y)
+    tab_length=20.0,       # free length from the lid mouth up to the tab root
+    slot=1.0,              # slot width on each side of the tab
+    engage=0.4,            # radial overlap bump <-> tower face (the "click")
+    bump_z=1.2,            # bump starts this far above the lid mouth
+    insert_angle=30.0,     # lower ramp, deg from vertical (easy closing)
+    release_angle=45.0,    # upper ramp, deg from vertical (= steepest support-free face)
+    crest=0.6,             # flat crest height of the bump
+    groove_clear=0.2,      # extra groove size around the bump
 )
 
-FIT_TEST_H = 10.0            # optional reference ring using the same cavity
+FIT_TEST_H = 10.0
 FIT_TEST_WALL = 2.0
 
-CH_BED = 0.6                 # elephant-foot chamfer on bed edges
-CH_GROOVE = 1.0              # V-groove at the lid/base joint (thumb grip)
-CH_LID_TOP = 1.2             # lid top outer edge (on the bed when printing)
-CH_LID_MOUTH = 0.8           # lead-in chamfer inside the lid mouth
-TOWER_LEADIN = 0.8           # outer top chamfer on the towers (guides lid + tab bumps)
+CH_BED = 0.6              # elephant-foot chamfer on bed edges
+CH_GROOVE = 1.0           # V-groove at the lid/base joint (thumb grip)
+CH_LID_TOP = 1.2          # lid top outer edge (on the bed when printing)
+CH_LID_MOUTH = 0.8        # lead-in chamfer inside the lid mouth
+LIP_LEADIN = 0.6          # outer top chamfer on the lips (guides lid + tab bumps)
 SEG = 16
 
 A1_MINI_BED = (180.0, 180.0, 180.0)
-PLATE_GAP = 5.0             # between base and lid on the plate (leaves 5 mm bed margins)
+PLATE_GAP = 8.0
 PLA_DENSITY = 1.24
-V3_HEIGHT = 99.1
+V2_HEIGHT = 130.54
 
 # ----------------------------------------------------------------------------
 # DERIVED DIMENSIONS
@@ -81,16 +103,16 @@ OUT_L = TOWER_L + 2 * (LID_CLEARANCE + LID_WALL)
 OUT_W = TOWER_W + 2 * (LID_CLEARANCE + LID_WALL)
 OUT_R = TOWER_R + LID_CLEARANCE + LID_WALL
 
-Z_CRADLE = FLOOR + CRADLE_HEIGHT             # band top = window bottom = lid mouth
-Z_TOWER = FLOOR + TOWER_HEIGHT
-Z_CEIL = FLOOR + FOX_INTERNAL_HEIGHT         # lid ceiling
-Z_TOP = Z_CEIL + LID_TOP
+Z_CRADLE = FLOOR + CRADLE_H                  # band top = window bottom = lid mouth
+Z_SEAT = FLOOR + FOX_INTERNAL_HEIGHT         # tray underside
+TRAY_INSET = LIP_T + TRAY_CLEARANCE
+TRAY_L, TRAY_W, TRAY_R = TOWER_L - 2 * TRAY_INSET, TOWER_W - 2 * TRAY_INSET, TOWER_R - TRAY_INSET
+TRAY_H = TRAY_FLOOR + ACCESSORY_TRAY_HEIGHT
+Z_TRAY_TOP = Z_SEAT + TRAY_H
+Z_LID_CEIL = Z_TRAY_TOP + LID_TOP_GAP
+Z_TOP = Z_LID_CEIL + LID_TOP
 TOTAL_CASE_HEIGHT = Z_TOP
-WINDOW_HALF = FINGER_WINDOW_LENGTH / 2
-WINDOW_STUB = CAV_L / 2 - CAV_R - WINDOW_HALF   # straight tower stub left past the corner arc
-assert WINDOW_STUB >= 0, "FINGER_WINDOW_LENGTH too long for the cavity corners"
-assert Z_TOWER + 1.0 < Z_CEIL, "towers must stay below the lid ceiling"
-assert Z_CRADLE + LID_RETENTION["tab_length"] < Z_CEIL, "snap tab longer than the lid sleeve"
+WINDOW_HALF = CAV_L / 2 - CAV_R - WINDOW_STUB
 
 # ----------------------------------------------------------------------------
 # PATHS
@@ -217,9 +239,14 @@ def build_base():
     R = LID_RETENTION
     band = loft_rr("Base", OUT_L, OUT_W, OUT_R,
                    [(0, -CH_BED), (CH_BED, 0), (Z_CRADLE - CH_GROOVE, 0), (Z_CRADLE, -CH_GROOVE)])
-    towers = loft_rr("t_towers", TOWER_L, TOWER_W, TOWER_R,
-                     [(1.0, 0), (Z_TOWER - TOWER_LEADIN, 0), (Z_TOWER, -TOWER_LEADIN)])
+    towers = prism_rr("t_towers", TOWER_L, TOWER_W, TOWER_R, 1.0, Z_SEAT)
     boolean(band, towers, "UNION")
+    lip = loft_rr("t_lip", TOWER_L, TOWER_W, TOWER_R,
+                  [(Z_SEAT - 0.01, 0), (Z_SEAT + LIP_H - LIP_LEADIN, 0), (Z_SEAT + LIP_H, -LIP_LEADIN)])
+    lip_in = prism_rr("t_lipin", TOWER_L - 2 * LIP_T, TOWER_W - 2 * LIP_T, TOWER_R - LIP_T,
+                      Z_SEAT - 0.5, Z_SEAT + LIP_H + 1)
+    boolean(lip, lip_in, "DIFFERENCE")
+    boolean(band, lip, "UNION")
     cav = prism_rr("t_cav", CAV_L, CAV_W, CAV_R, FLOOR, Z_TOP + 10)
     boolean(band, cav, "DIFFERENCE")
     win = extrude_xz("t_win", u_notch_pts(WINDOW_HALF, Z_CRADLE, Z_TOP + 10, WINDOW_FILLET), -OUT_W, OUT_W)
@@ -227,11 +254,20 @@ def build_base():
     # detent grooves in both tower end walls: the lid bump shape, grown by groove_clear
     g, c = R["groove_clear"], LID_CLEARANCE
     for sign in (+1, -1):
-        pts = bump_profile(sign * (TOWER_L / 2 + c), -sign, c + RETENTION_ENGAGEMENT + g,
+        pts = bump_profile(sign * (TOWER_L / 2 + c), -sign, c + R["engage"] + g,
                            Z_CRADLE + R["bump_z"] - g, R["crest"] + 2 * g)
         cut = extrude_xz("t_groove", pts, -(R["tab_width"] / 2 + 1), R["tab_width"] / 2 + 1)
         boolean(band, cut, "DIFFERENCE")
     return band
+
+
+def build_tray():
+    tray = loft_rr("Tray", TRAY_L, TRAY_W, TRAY_R,
+                   [(Z_SEAT, -CH_BED), (Z_SEAT + CH_BED, 0), (Z_TRAY_TOP, 0)])
+    inner = loft_rr("t_tin", TRAY_L - 2 * WALL, TRAY_W - 2 * WALL, TRAY_R - WALL,
+                    [(Z_SEAT + TRAY_FLOOR, 0), (Z_TRAY_TOP - 0.5, 0), (Z_TRAY_TOP + 0.01, 0.51)])
+    boolean(tray, inner, "DIFFERENCE")
+    return tray
 
 
 def build_lid():
@@ -241,16 +277,18 @@ def build_lid():
                    (Z_TOP - CH_LID_TOP, 0), (Z_TOP, -CH_LID_TOP)])
     c = LID_CLEARANCE
     inner = loft_rr("t_lin", TOWER_L, TOWER_W, TOWER_R,
-                    [(Z_CRADLE - 1, c + CH_LID_MOUTH + 1), (Z_CRADLE + CH_LID_MOUTH, c), (Z_CEIL, c)])
+                    [(Z_CRADLE - 1, c + CH_LID_MOUTH + 1), (Z_CRADLE + CH_LID_MOUTH, c), (Z_LID_CEIL, c)])
     boolean(lid, inner, "DIFFERENCE")
     for sign in (+1, -1):
+        # two slots through the end wall free a cantilever tab from the mouth upward
         x_in, x_out = sign * (TOWER_L / 2 - 1), sign * (OUT_L / 2 + 1)
         for ys in (+1, -1):
             y0, y1 = ys * R["tab_width"] / 2, ys * (R["tab_width"] / 2 + R["slot"])
             s = box("t_slot", min(x_in, x_out), max(x_in, x_out), min(y0, y1), max(y0, y1),
                     Z_CRADLE - 1, Z_CRADLE + R["tab_length"])
             boolean(lid, s, "DIFFERENCE")
-        pts = bump_profile(sign * (TOWER_L / 2 + c), -sign, c + RETENTION_ENGAGEMENT,
+        # inward bump on the tab: stands clearance + engage proud of the lid inner face
+        pts = bump_profile(sign * (TOWER_L / 2 + c), -sign, c + R["engage"],
                            Z_CRADLE + R["bump_z"], R["crest"])
         b = extrude_xz("t_bump", pts, -(R["tab_width"] / 2 - 0.5), R["tab_width"] / 2 - 0.5)
         boolean(lid, b, "UNION")
@@ -269,9 +307,19 @@ def build_proxies():
     L, W, H, r = FOX_PROXY
     fox = loft_rr("PROXY_FOX", L, W, r, [(FLOOR, -2.0), (FLOOR + 2.0, 0), (FLOOR + H - 4.0, 0), (FLOOR + H, -4.0)])
     sensor = box("PROXY_FOX_SensorFace", -L / 2 + 8, L / 2 - 8, -W / 2 - 0.2, -W / 2 + 1.5, FLOOR + 9, FLOOR + H - 7)
-    for o in (fox, sensor):
+    zf = Z_SEAT + TRAY_FLOOR
+    tin_l = TRAY_L - 2 * WALL
+    cw, cd, ch = CHARGER
+    chg = loft_rr("PROXY_Charger", cw, cd, 5, [(zf, 0), (zf + ch, 0)])
+    chg.location.x = tin_l / 2 - cw / 2 - 1.0
+    # cable coiled freely beside the charger: stand-in loose coil ~54 x 64 x 40
+    coil = loft_rr("PROXY_CableCoil", 54, 64, 20, [(zf, 0), (zf + 40, 0)])
+    coil_in = loft_rr("t_ci", 30, 40, 10, [(zf - 1, 0), (zf + 41, 0)])
+    boolean(coil, coil_in, "DIFFERENCE")
+    coil.location.x = -(tin_l / 2 - 27 - 1.0)
+    for o in (fox, sensor, chg, coil):
         o["proxy"] = True
-    return [fox, sensor]
+    return [fox, sensor, chg, coil]
 
 
 # ----------------------------------------------------------------------------
@@ -364,14 +412,13 @@ def bvh_of(ob, extra=None):
     return t
 
 
-def min_gap(a, b, a_extra=None, b_extra=None, zmin=None, zmax=None):
-    """Smallest distance from a's vertices (optionally only zmin..zmax) to b's surface."""
+def min_gap(a, b, a_extra=None, b_extra=None, zmin=None):
     tb = bvh_of(b, b_extra)
     M = (a_extra or Matrix.Identity(4)) @ a.matrix_world
     best = 1e9
     for v in a.data.vertices:
         p = M @ v.co
-        if (zmin is not None and p.z < zmin) or (zmax is not None and p.z > zmax):
+        if zmin is not None and p.z < zmin:
             continue
         d = tb.find_nearest(p)[3]
         if d is not None and d < best:
@@ -384,9 +431,23 @@ def interferes(a, b, lift=0.0, a_extra=None, b_extra=None):
     return len(bvh_of(a, ea).overlap(bvh_of(b, b_extra))) > 0
 
 
-def ray_down(ob, x, y, z_from):
-    loc = bvh_of(ob).ray_cast(Vector((x, y, z_from)), Vector((0, 0, -1)), 500)[0]
-    return loc.z if loc else None
+def divider_free(tray, n=24):
+    """Drop rays into the tray on an n x n grid: each must land on the tray floor.
+    Any internal wall or rib would stop a ray higher up."""
+    t = bvh_of(tray)
+    xi, yi = (TRAY_L - 2 * WALL) / 2 - 0.8, (TRAY_W - 2 * WALL) / 2 - 0.8
+    zfloor = Z_SEAT + TRAY_FLOOR
+    rays = bad = 0
+    for i in range(n):
+        for j in range(n):
+            x, y = -xi + 2 * xi * i / (n - 1), -yi + 2 * yi * j / (n - 1)
+            if abs(x) > xi - 3 and abs(y) > yi - 3:
+                continue
+            loc = t.ray_cast(Vector((x, y, Z_TRAY_TOP + 5)), Vector((0, 0, -1)), 500)[0]
+            rays += 1
+            if loc is None or abs(loc.z - zfloor) > 0.05:
+                bad += 1
+    return {"rays": rays, "rays_blocked_above_floor": bad, "divider_free": bad == 0}
 
 
 def retention_estimate():
@@ -394,13 +455,15 @@ def retention_estimate():
     R = LID_RETENTION
     E, mu = 3500.0, 0.3
     I = R["tab_width"] * LID_WALL ** 3 / 12
-    F_r = 3 * E * I * RETENTION_ENGAGEMENT / R["tab_length"] ** 3
+    F_r = 3 * E * I * R["engage"] / R["tab_length"] ** 3
     t = math.tan(math.radians(R["release_angle"]))
+    F_rel = F_r * (t + mu) / (1 - mu * t)
     ti = math.tan(math.radians(R["insert_angle"]))
-    strain = 1.5 * LID_WALL * RETENTION_ENGAGEMENT / R["tab_length"] ** 2
+    F_ins = F_r * (ti + mu) / (1 - mu * ti)
+    strain = 1.5 * LID_WALL * R["engage"] / R["tab_length"] ** 2
     return {"tab_radial_force_N": round(F_r, 1),
-            "close_force_total_N": round(2 * F_r * (ti + mu) / (1 - mu * ti), 1),
-            "open_force_total_N": round(2 * F_r * (t + mu) / (1 - mu * t), 1),
+            "close_force_total_N": round(2 * F_ins, 1),
+            "open_force_total_N": round(2 * F_rel, 1),
             "tab_root_strain_pct": round(100 * strain, 2)}
 
 
@@ -473,100 +536,98 @@ def main(export=True, save=True):
     if COLL not in bpy.data.collections:
         sc.collection.children.link(bpy.data.collections.new(COLL))
 
-    base, lid, fit = build_base(), build_lid(), build_fit_test()
+    base, tray, lid, fit = build_base(), build_tray(), build_lid(), build_fit_test()
     fit.location.y = -(OUT_W + 40)
     build_proxies()
-    bpy.context.view_layer.update()
-    fox, sensor = bpy.data.objects["PROXY_FOX"], bpy.data.objects["PROXY_FOX_SensorFace"]
+    bpy.context.view_layer.update()   # make .location changes live in matrix_world
+    O = bpy.data.objects
+    fox, sensor, chg, coil = O["PROXY_FOX"], O["PROXY_FOX_SensorFace"], O["PROXY_Charger"], O["PROXY_CableCoil"]
 
-    # print orientations: base upright, lid upside down (flat top on the bed)
+    # print orientations: base + tray upright, lid upside down (flat top on the bed)
     flip = Matrix.Translation((0, 0, Z_TOP)) @ Matrix.Rotation(math.pi, 4, "X")
-    orient = {base: Matrix.Identity(4), lid: flip, fit: Matrix.Translation((0, OUT_W + 40, 0))}
+    orient = {base: Matrix.Identity(4), tray: Matrix.Translation((0, 0, -Z_SEAT)),
+              lid: flip, fit: Matrix.Translation((0, OUT_W + 40, 0))}
     cx, cy = A1_MINI_BED[0] / 2, A1_MINI_BED[1] / 2
-    plate = {base: Matrix.Translation((cx, cy - (OUT_W + PLATE_GAP) / 2, 0)) @ orient[base],
-             lid: Matrix.Translation((cx, cy + (OUT_W + PLATE_GAP) / 2, 0)) @ orient[lid]}
+    plates = {
+        "plate_A_base_and_tray": {
+            base: Matrix.Translation((cx, cy - (OUT_W + PLATE_GAP) / 2, 0)) @ orient[base],
+            tray: Matrix.Translation((cx, cy + (TRAY_W + PLATE_GAP) / 2, 0)) @ orient[tray]},
+        "plate_B_lid": {lid: Matrix.Translation((cx, cy, 0)) @ orient[lid]},
+    }
 
     report = {"version": VERSION,
               "parameters": {k: v for k, v in globals().items()
                              if k.isupper() and isinstance(v, (int, float, tuple, dict))}}
+    tin_l, tin_w, tin_r = TRAY_L - 2 * WALL, TRAY_W - 2 * WALL, TRAY_R - WALL
     report["derived"] = {
         "case_outer_mm": [round(OUT_L, 2), round(OUT_W, 2), round(TOTAL_CASE_HEIGHT, 2)],
-        "height_change_vs_v3_mm": round(TOTAL_CASE_HEIGHT - V3_HEIGHT, 2),
+        "height_change_vs_v2_mm": round(TOTAL_CASE_HEIGHT - V2_HEIGHT, 2),
         "fox_cavity_mm": [CAV_L, CAV_W, "R%.2f" % CAV_R],
-        "fox_internal_height_mm": round(Z_CEIL - FLOOR, 2),
-        "cradle_capture_height_mm": CRADLE_HEIGHT,
-        "finger_window_length_mm": FINGER_WINDOW_LENGTH,
-        "tower_stub_mm": round(WINDOW_STUB, 2),
+        "fox_internal_height_mm": round(Z_SEAT - FLOOR, 2),
+        "tray_inner_mm": [round(tin_l, 2), round(tin_w, 2), ACCESSORY_TRAY_HEIGHT, "R%.2f" % tin_r],
+        "tray_inner_volume_cm3": round((tin_l * tin_w - (4 - math.pi) * tin_r ** 2) * ACCESSORY_TRAY_HEIGHT / 1000, 1),
+        "finger_window_length_mm": round(2 * WINDOW_HALF, 2),
         "z_levels_mm": {"floor_top": FLOOR, "cradle_top_and_lid_mouth": Z_CRADLE,
-                        "tower_top": Z_TOWER, "lid_ceiling": Z_CEIL, "case_top": round(Z_TOP, 2)},
+                        "tray_underside": Z_SEAT, "tray_floor_top": round(Z_SEAT + TRAY_FLOOR, 2),
+                        "tray_top": round(Z_TRAY_TOP, 2), "lid_ceiling": round(Z_LID_CEIL, 2),
+                        "case_top": round(Z_TOP, 2)},
     }
-    parts = {"base": base, "lid": lid, "fit_test": fit}
+    parts = {"base": base, "tray": tray, "lid": lid, "fit_test": fit}
     report["parts"] = {k: mesh_stats(o, orient[o]) for k, o in parts.items()}
-
-    # measured, not assumed: cavity size at mid cradle height, ceiling height
-    zc = FLOOR + CRADLE_HEIGHT / 2
-    tb = bvh_of(base)
-    def wall_hit(origin, d):
-        loc = tb.ray_cast(Vector(origin), Vector(d), 200)[0]
-        return loc
-    xp = wall_hit((0, 0, zc), (1, 0, 0)); xm = wall_hit((0, 0, zc), (-1, 0, 0))
-    yp = wall_hit((0, 0, zc), (0, 1, 0)); ym = wall_hit((0, 0, zc), (0, -1, 0))
-    ceil = bvh_of(lid).ray_cast(Vector((0, 0, FLOOR + 1)), Vector((0, 0, 1)), 200)[0]
-    fox_top = FLOOR + FOX_PROXY[2]
-    report["measured"] = {
-        "cavity_length_mm": round(xp.x - xm.x, 2), "cavity_width_mm": round(yp.y - ym.y, 2),
-        "floor_to_lid_ceiling_mm": round(ceil.z - ray_down(base, 0, 0, 30), 2),
-        "fox_proxy_top_clearance_mm": round(ceil.z - fox_top, 2),
-    }
+    report["tray_divider_check"] = divider_free(tray)
     report["lid_retention"] = {
         "type": "2 cantilever snap tabs in the lid short ends + matching grooves in the base towers",
-        "engagement_mm": RETENTION_ENGAGEMENT,
+        "bump_overlap_with_tower_face_mm": LID_RETENTION["engage"],
         "closed_bump_sits_in_groove_without_clash": not interferes(lid, base, lift=0.02),
         **retention_estimate()}
     report["assembly"] = {
+        "clash_base_tray(resting)": interferes(tray, base, lift=0.02),
         "clash_base_lid(resting)": interferes(lid, base, lift=0.02),
+        "clash_tray_lid": interferes(tray, lid),
         "clash_fox_base(resting)": interferes(fox, base, lift=0.02),
+        "clash_fox_tray": interferes(fox, tray),
         "clash_fox_lid": interferes(fox, lid),
+        "clash_charger_tray(resting)": interferes(chg, tray, lift=0.02),
+        "clash_cable_tray(resting)": interferes(coil, tray, lift=0.02),
+        "clash_charger_lid": interferes(chg, lid),
+        "clash_charger_cable": interferes(chg, coil),
         "clash_sensor_face_base": interferes(sensor, base),
-        "lid_presses_on_fox": interferes(fox, lid, lift=0.5),
-        "gap_fox_proxy_side_to_cradle_mm": round(min_gap(fox, base, zmin=FLOOR + 1.9, zmax=Z_CRADLE), 2),
-        "gap_fox_proxy_top_to_lid_mm": round(min_gap(fox, lid, zmin=FLOOR + FOX_PROXY[2] - 0.1), 2),
-        "gap_fox_proxy_to_lid_any_mm": round(min_gap(fox, lid), 2),
-        "gap_tower_top_to_lid_ceiling_mm": round(Z_CEIL - Z_TOWER, 2),
+        "gap_fox_proxy_side_to_cradle_mm": round(min_gap(fox, base, zmin=FLOOR + 2.5), 2),
+        "gap_fox_proxy_top_to_tray_mm": round(min_gap(fox, tray), 2),
+        "gap_tray_top_to_lid_mm": round(min_gap(tray, lid), 2),
+        "gap_charger_top_to_lid_mm": round(min_gap(chg, lid), 2),
         "gap_sensor_face_to_base_mm": round(min_gap(sensor, base), 2),
         "gap_sensor_face_to_lid_mm": round(min_gap(sensor, lid), 2),
     }
-    pts = []
-    for o, M in plate.items():
-        bm = world_bm(o, M)
-        pts += [v.co.copy() for v in bm.verts]
-        bm.free()
-    mn = [min(p[i] for p in pts) for i in range(3)]
-    mx = [max(p[i] for p in pts) for i in range(3)]
-    report["one_plate"] = {
-        "layout": "base (upright) and lid (upside down) side by side, no nesting",
-        "bbox_min": [round(v, 1) for v in mn], "bbox_max": [round(v, 1) for v in mx],
-        "footprint_mm": [round(mx[0] - mn[0], 1), round(mx[1] - mn[1], 1)],
-        "fits_bed": all(mn[i] >= -1e-3 and mx[i] <= A1_MINI_BED[i] for i in range(3)),
-        "clash_on_plate": interferes(base, lid, a_extra=plate[base], b_extra=plate[lid]),
-        "gap_between_parts_mm": round(min_gap(base, lid, plate[base], plate[lid]), 2),
-    }
-    solid = report["parts"]["base"]["pla_g_solid_est"] + report["parts"]["lid"]["pla_g_solid_est"]
+    report["plates"] = {}
+    for pname, objs in plates.items():
+        pts = []
+        for o, M in objs.items():
+            bm = world_bm(o, M)
+            pts += [v.co.copy() for v in bm.verts]
+            bm.free()
+        mn = [min(p[i] for p in pts) for i in range(3)]
+        mx = [max(p[i] for p in pts) for i in range(3)]
+        report["plates"][pname] = {"bbox_min": [round(v, 1) for v in mn], "bbox_max": [round(v, 1) for v in mx],
+                                   "fits_bed": all(mn[i] >= 0 and mx[i] <= A1_MINI_BED[i] for i in range(3))}
+    solid = sum(report["parts"][k]["pla_g_solid_est"] for k in ("base", "tray", "lid"))
     report["material"] = {"solid_equivalent_g": round(solid, 1),
-                          "expected_sliced_g_3walls_15pct": [round(solid * 0.8), round(solid * 0.92)]}
+                          "expected_sliced_g_3walls_15pct": [round(solid * 0.78), round(solid * 0.9)]}
 
     if export:
         os.makedirs(EXPORTS, exist_ok=True)
         for f in os.listdir(EXPORTS):
             if f.endswith((".stl", ".3mf")):
                 os.remove(os.path.join(EXPORTS, f))
-        write_stl(os.path.join(EXPORTS, "fox_case_v4_base.stl"), [baked_mesh(base, orient[base])])
-        write_stl(os.path.join(EXPORTS, "fox_case_v4_lid.stl"), [baked_mesh(lid, orient[lid])])
-        write_stl(os.path.join(EXPORTS, "fox_fit_test_cradle_ring_v3.stl"), [baked_mesh(fit, orient[fit])])
-        write_3mf(os.path.join(EXPORTS, "fox_case_v4_A1mini_one_plate.3mf"),
-                  [(o.name, *baked_mesh(o, M)) for o, M in plate.items()])
-        write_3mf(os.path.join(EXPORTS, "fox_case_v4_assembled.3mf"),
-                  [(o.name, *baked_mesh(o, Matrix.Identity(4))) for o in (base, lid)])
+        names = {"base": "fox_case_v3_base.stl", "tray": "fox_case_v3_accessory_tray.stl",
+                 "lid": "fox_case_v3_lid.stl", "fit_test": "fox_fit_test_cradle_ring_v3.stl"}
+        for k, o in parts.items():
+            write_stl(os.path.join(EXPORTS, names[k]), [baked_mesh(o, orient[o])])
+        for pname, objs in plates.items():
+            write_3mf(os.path.join(EXPORTS, "fox_case_v3_%s.3mf" % pname),
+                      [(o.name, *baked_mesh(o, M)) for o, M in objs.items()])
+        write_3mf(os.path.join(EXPORTS, "fox_case_v3_assembled.3mf"),
+                  [(o.name, *baked_mesh(o, Matrix.Identity(4))) for o in (base, tray, lid)])
         with open(os.path.join(EXPORTS, "validation_report.json"), "w") as fh:
             json.dump(report, fh, indent=2, default=str)
     if save:
