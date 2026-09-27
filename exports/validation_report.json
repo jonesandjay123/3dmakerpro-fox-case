@@ -1,0 +1,176 @@
+{
+  "parameters": {
+    "FOX_LENGTH": 113.0,
+    "FOX_WIDTH": 70.0,
+    "FOX_HEIGHT": 35.0,
+    "FOX_CORNER_R": 4.0,
+    "FOX_CLEARANCE_XY": 1.25,
+    "FOX_CLEARANCE_Z": 1.5,
+    "FLOOR": 2.4,
+    "CRADLE_H": 8.0,
+    "WALL": 2.0,
+    "LID_WALL": 2.4,
+    "LID_CLEARANCE": 0.35,
+    "LID_TOP": 2.4,
+    "LID_TOP_GAP": 1.0,
+    "WINDOW_STUB": 4.0,
+    "WINDOW_FILLET": 5.0,
+    "LIP_H": 2.5,
+    "LIP_T": 1.2,
+    "TRAY_CLEARANCE": 0.3,
+    "TRAY_FLOOR": 2.0,
+    "ACCESSORY_BOX": [
+      180.0,
+      68.0,
+      44.0
+    ],
+    "ACCESSORY_VOLUME_TARGET": 538560.0,
+    "ACCESSORY_HEIGHT": 69,
+    "FIT_TEST_H": 10.0,
+    "FIT_TEST_WALL": 2.0,
+    "CH_BED": 0.6,
+    "CH_GROOVE": 1.0,
+    "CH_LID_TOP": 1.2,
+    "CH_LID_MOUTH": 0.8,
+    "CH_LIP": 0.6,
+    "SEG": 16,
+    "A1_MINI_BED": [
+      180.0,
+      180.0,
+      180.0
+    ],
+    "CAV_L": 115.5,
+    "CAV_W": 72.5,
+    "CAV_R": 5.25,
+    "TOWER_L": 119.5,
+    "TOWER_W": 76.5,
+    "TOWER_R": 7.25,
+    "OUT_L": 125.0,
+    "OUT_W": 82.0,
+    "OUT_R": 10.0,
+    "Z_CRADLE": 10.4,
+    "Z_SEAT": 38.9,
+    "TRAY_L": 116.5,
+    "TRAY_W": 73.5,
+    "TRAY_R": 5.75,
+    "TRAY_INNER_AREA": 7806.678646691106,
+    "TRAY_H": 71.0,
+    "Z_TRAY_TOP": 109.9,
+    "Z_LID_CEIL": 110.9,
+    "Z_TOP": 113.30000000000001,
+    "WINDOW_HALF": 48.5
+  },
+  "derived": {
+    "cavity_mm": [
+      115.5,
+      72.5,
+      "R5.25"
+    ],
+    "case_outer_mm": [
+      125.0,
+      82.0,
+      113.3
+    ],
+    "tray_inner_mm": [
+      112.5,
+      69.5,
+      69
+    ],
+    "tray_usable_volume_cm3": 538.7,
+    "finger_window_length_mm": 97.0,
+    "z_levels_mm": {
+      "floor_top": 2.4,
+      "cradle_top_and_lid_bottom": 10.4,
+      "tray_underside": 38.9,
+      "tray_top": 109.9,
+      "case_top": 113.30000000000001
+    }
+  },
+  "parts": {
+    "base": {
+      "nonmanifold_edges": 0,
+      "nonmanifold_verts": 0,
+      "islands": 1,
+      "self_intersections": 0,
+      "volume_cm3": 49.41,
+      "pla_g_solid_est": 61.3,
+      "size_print_mm": [
+        125.0,
+        82.0,
+        41.4
+      ],
+      "fits_a1_mini": true,
+      "overhang_area_mm2": 0.0,
+      "wall_thickness_p1_mm": 1.2,
+      "area_thinner_than_1p2mm_mm2": 76.5
+    },
+    "tray": {
+      "nonmanifold_edges": 0,
+      "nonmanifold_verts": 0,
+      "islands": 1,
+      "self_intersections": 0,
+      "volume_cm3": 67.16,
+      "pla_g_solid_est": 83.3,
+      "size_print_mm": [
+        116.5,
+        73.5,
+        71.0
+      ],
+      "fits_a1_mini": true,
+      "overhang_area_mm2": 0.0,
+      "wall_thickness_p1_mm": 2.0,
+      "area_thinner_than_1p2mm_mm2": 0
+    },
+    "lid": {
+      "nonmanifold_edges": 0,
+      "nonmanifold_verts": 0,
+      "islands": 1,
+      "self_intersections": 0,
+      "volume_cm3": 117.66,
+      "pla_g_solid_est": 145.9,
+      "size_print_mm": [
+        125.0,
+        82.0,
+        102.9
+      ],
+      "fits_a1_mini": true,
+      "overhang_area_mm2": 0.0,
+      "wall_thickness_p1_mm": 2.4,
+      "area_thinner_than_1p2mm_mm2": 0
+    },
+    "fit_test": {
+      "nonmanifold_edges": 0,
+      "nonmanifold_verts": 0,
+      "islands": 1,
+      "self_intersections": 0,
+      "volume_cm3": 7.35,
+      "pla_g_solid_est": 9.1,
+      "size_print_mm": [
+        119.5,
+        76.5,
+        10.0
+      ],
+      "fits_a1_mini": true,
+      "overhang_area_mm2": 0.0,
+      "wall_thickness_p1_mm": 2.0,
+      "area_thinner_than_1p2mm_mm2": 0
+    }
+  },
+  "assembly": {
+    "clash_base_tray(resting)": false,
+    "clash_base_lid(resting)": false,
+    "clash_tray_lid": false,
+    "clash_fox_base(resting)": false,
+    "clash_fox_tray": false,
+    "clash_fox_lid": false,
+    "clash_charger_tray(resting)": false,
+    "clash_cable_tray(resting)": false,
+    "clash_sensor_face_base": false,
+    "gap_fox_side_to_base_mm": 1.25,
+    "gap_fox_top_to_tray_mm": 1.5,
+    "gap_fox_to_lid_mm": 3.6,
+    "gap_tray_top_to_lid_mm": 1.0,
+    "gap_sensor_face_to_base_mm": 1.05,
+    "gap_sensor_face_to_lid_mm": 3.4
+  }
+}
