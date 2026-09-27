@@ -121,9 +121,11 @@ bm.to_mesh(cutter.data); bm.free()
 cutter.scale = (400, 200, 400)
 cutter.location = (0, -100, 100)
 sc.collection.objects.link(cutter)
+bpy.context.view_layer.update()
 for n in case + fox + acc:
     c = O[n].copy(); c.data = O[n].data.copy(); c.name = "DOC_sec_" + n
     sc.collection.objects.link(c)
+    c.hide_viewport = False
     m = c.modifiers.new("cut", "BOOLEAN"); m.operation = "DIFFERENCE"; m.solver = "EXACT"; m.object = cutter
     bpy.context.view_layer.objects.active = c
     bpy.ops.object.modifier_apply(modifier="cut")
@@ -141,22 +143,46 @@ reset(); show(["FitTest"] + fox)
 O["FitTest"].location = (0, 0, 2.4)
 shoot("07_fit_test_ring.png", (0, 0, 15), (0.9, -1.4, 1.1), dist=380, lens=55)
 
-# 8. print plates on the A1 mini bed (180 x 180)
+# 8. the single A1 mini plate: base + lid with the tray nested inside it
 reset()
 bed = bpy.data.objects.new("DOC_bed", bpy.data.meshes.new("DOC_bed"))
 bm = bmesh.new(); bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=90); bm.to_mesh(bed.data); bm.free()
-sc.collection.objects.link(bed); bed.color = (0.75, 0.75, 0.72, 1)
-show(["DOC_bed", "Lid", "Tray"])
-O["Lid"].rotation_euler = (math.pi, 0, 0)
-O["Lid"].location = (0, 42, 113.3)       # upside down, top on bed
-O["Tray"].location = (0, -44, -38.9)
-shoot("08_plate1_lid_and_tray.png", (0, 0, 40), (0.35, -0.8, 1.0), dist=650, lens=50)
-O["Lid"].rotation_euler = (0, 0, 0)
-reset()
-show(["DOC_bed", "Base", "FitTest"])
-O["Base"].location = (0, 40, 0)
-O["FitTest"].location = (0, -48, 0)
-shoot("08_plate2_base_and_fittest.png", (0, 0, 20), (0.35, -0.8, 1.0), dist=650, lens=50)
+sc.collection.objects.link(bed); bed.color = (0.62, 0.62, 0.60, 1)
+g = globals().get("BUILD", {})
+PB = g.get("PLATE_BASE_CENTER", (90, 135)); PL = g.get("PLATE_LID_CENTER", (90, 45))
+ZC = g.get("Z_CRADLE", 10.4); ZS = g.get("Z_SEAT", 38.9)
+place = {"Base": (PB[0] - 90, PB[1] - 90, 0), "Lid": (PL[0] - 90, PL[1] - 90, -ZC),
+         "Tray": (PL[0] - 90, PL[1] - 90, -ZS)}
+for n, loc in place.items():
+    O[n].location = loc
+show(["DOC_bed", "Base", "Lid", "Tray"])
+shoot("08_one_plate_A1mini.png", (0, 0, 40), (0.45, -0.9, 1.0), dist=700, lens=50)
+shoot("08b_one_plate_top.png", (0, 0, 0), (0, 0, 1), ortho=200, dist=600)
+
+# 9. print progress: the same plate cut at several heights (layers grow from the bed up)
+import bmesh as _bm
+frames = [2.4, 10.4, 41.4, 71.0, 105.0, 125.0]
+for k, h in enumerate(frames):
+    names = []
+    cut = bpy.data.objects.new("DOC_zcut", bpy.data.meshes.new("DOC_zcut"))
+    b = _bm.new(); _bm.ops.create_cube(b, size=1.0); b.to_mesh(cut.data); b.free()
+    cut.scale = (400, 400, 400); cut.location = (0, 0, h + 200)
+    sc.collection.objects.link(cut)
+    bpy.context.view_layer.update()   # make the cutter's transform live before applying
+    for n in ("Base", "Lid", "Tray"):
+        c = O[n].copy(); c.data = O[n].data.copy(); c.name = "DOC_p_" + n
+        sc.collection.objects.link(c)
+        c.hide_viewport = False   # modifier_apply silently fails on hidden objects
+        m = c.modifiers.new("cut", "BOOLEAN"); m.operation = "DIFFERENCE"; m.solver = "EXACT"; m.object = cut
+        bpy.context.view_layer.objects.active = c
+        bpy.ops.object.modifier_apply(modifier="cut")
+        c.color = COLORS[n]
+        names.append(c.name)
+    bpy.data.objects.remove(cut, do_unlink=True)
+    show(["DOC_bed"] + names)
+    shoot("09_print_progress_%d_z%03d.png" % (k + 1, round(h)), (0, 0, 35), (0.45, -0.9, 1.0), dist=700, lens=50)
+    for n in names:
+        bpy.data.objects.remove(O[n], do_unlink=True)
 bpy.data.objects.remove(bed, do_unlink=True)
 
 # restore scene for the saved .blend
