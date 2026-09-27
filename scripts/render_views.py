@@ -1,11 +1,12 @@
 """
-Render documentation views of the FOX case V1 (Workbench, fast, no lights needed).
-Run AFTER scripts/build_fox_case.py in the same Blender session:
-    exec(open("<repo>/scripts/render_views.py").read())
+Render documentation views of the FOX case (Workbench, fast). Run AFTER
+scripts/build_fox_case.py in the same Blender session, passing its globals as BUILD:
+    g = {...}; exec(open(".../build_fox_case.py").read(), g)
+    exec(open(".../render_views.py").read(), {"BUILD": g, "__file__": ...})
 Outputs PNGs to renders/.
 """
-import bpy, math, os
-from mathutils import Vector, Matrix
+import bpy, bmesh, math, os
+from mathutils import Vector
 
 try:
     ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -13,6 +14,9 @@ except NameError:
     ROOT = "/Users/joneswang/Downloads/code/3dmakerpro-fox-case"
 OUT = os.path.join(ROOT, "renders")
 os.makedirs(OUT, exist_ok=True)
+B = globals().get("BUILD", {})
+Z_TOP, Z_SEAT, Z_CRADLE = B.get("Z_TOP", 99.1), B.get("Z_SEAT", 38.5), B.get("Z_CRADLE", 10.0)
+OUT_W = B.get("OUT_W", 82.5)
 
 sc = bpy.context.scene
 O = bpy.data.objects
@@ -23,24 +27,19 @@ COLORS = {"Base": (0.20, 0.23, 0.27, 1), "Tray": (0.45, 0.60, 0.75, 1), "Lid": (
           "PROXY_FOX_SensorFace": (0.04, 0.04, 0.05, 1), "PROXY_Charger": (0.10, 0.10, 0.12, 1),
           "PROXY_CableCoil": (0.16, 0.16, 0.17, 1)}
 HOME = {n: O[n].location.copy() for n in PARTS}
-Z_SEAT = 38.9  # informational; positions below are relative offsets
+HOME_ROT = {n: O[n].rotation_euler.copy() for n in PARTS}
 
 sc.render.engine = "BLENDER_WORKBENCH"
 sh = sc.display.shading
-sh.light = "STUDIO"
-sh.color_type = "OBJECT"
-sh.show_cavity = True
-sh.cavity_type = "BOTH"
-sh.show_object_outline = True
-sh.show_shadows = False
-sc.render.resolution_x = 1400
-sc.render.resolution_y = 1000
+sh.light, sh.color_type = "STUDIO", "OBJECT"
+sh.show_cavity, sh.cavity_type = True, "BOTH"
+sh.show_object_outline, sh.show_shadows = True, False
+sc.render.resolution_x, sc.render.resolution_y = 1400, 1000
 sc.render.film_transparent = False
 if sc.world is None:
     sc.world = bpy.data.worlds.new("World")
 sc.world.color = (0.94, 0.94, 0.95)
 sc.view_settings.view_transform = "Standard"
-
 for n, c in COLORS.items():
     O[n].color = c
 
@@ -61,132 +60,127 @@ def show(names):
 
 def reset():
     for n in PARTS:
-        O[n].location = HOME[n]
+        O[n].location, O[n].rotation_euler = HOME[n].copy(), HOME_ROT[n].copy()
+    bpy.context.view_layer.update()
 
 
 def shoot(fname, target, direction, ortho=None, dist=600, lens=60):
-    t = Vector(target)
-    d = Vector(direction).normalized()
+    bpy.context.view_layer.update()
+    t, d = Vector(target), Vector(direction).normalized()
     cam.location = t + d * dist
     cam.rotation_euler = (-d).to_track_quat("-Z", "Y").to_euler()
     if ortho:
-        cam_data.type = "ORTHO"
-        cam_data.ortho_scale = ortho
+        cam_data.type, cam_data.ortho_scale = "ORTHO", ortho
     else:
-        cam_data.type = "PERSP"
-        cam_data.lens = lens
+        cam_data.type, cam_data.lens = "PERSP", lens
     sc.render.filepath = os.path.join(OUT, fname)
     bpy.ops.render.render(write_still=True)
+
+
+def cut_copies(names, cutter_loc, cutter_scale, prefix):
+    """Boolean-cut copies of objects (for sections). Returns the copy names."""
+    cutter = bpy.data.objects.new(prefix + "cut", bpy.data.meshes.new(prefix + "cut"))
+    bm = bmesh.new(); bmesh.ops.create_cube(bm, size=1.0); bm.to_mesh(cutter.data); bm.free()
+    cutter.scale, cutter.location = cutter_scale, cutter_loc
+    sc.collection.objects.link(cutter)
+    bpy.context.view_layer.update()
+    out = []
+    for n in names:
+        c = O[n].copy(); c.data = O[n].data.copy(); c.name = prefix + n
+        sc.collection.objects.link(c)
+        c.hide_viewport = False          # modifier_apply silently fails on hidden objects
+        m = c.modifiers.new("cut", "BOOLEAN"); m.operation = "DIFFERENCE"; m.solver = "EXACT"; m.object = cutter
+        bpy.context.view_layer.objects.active = c
+        bpy.ops.object.modifier_apply(modifier="cut")
+        c.color = COLORS[n]
+        out.append(c.name)
+    bpy.data.objects.remove(cutter, do_unlink=True)
+    return out
+
+
+def drop(names):
+    for n in names:
+        bpy.data.objects.remove(O[n], do_unlink=True)
 
 
 case = ["Base", "Tray", "Lid"]
 fox = ["PROXY_FOX", "PROXY_FOX_SensorFace"]
 acc = ["PROXY_Charger", "PROXY_CableCoil"]
 
-# 1. closed case
+# 01 closed case
 reset(); show(case)
-shoot("01_closed_case.png", (0, 0, 55), (1.0, -1.3, 0.9), dist=520, lens=55)
+shoot("01_closed_case.png", (0, 0, Z_TOP / 2), (1.0, -1.3, 0.8), dist=480, lens=55)
 
-# 2. open case: lid set aside, tray lifted, everything visible
+# 02 open case with the FOX inside (lid and tray set aside)
 reset(); show(case + fox + acc)
-O["Lid"].location = (0, 150, -10.4)          # lid set down beside (bottom edge on table)
-for n in ["Tray"] + acc:
-    O[n].location.z += 45
-shoot("02_open_case.png", (0, 50, 60), (1.0, -1.4, 1.1), dist=720, lens=55)
+O["Lid"].location = (0, 125, -Z_CRADLE)
+O["Tray"].location = (150, 0, -Z_SEAT)
+for n in acc:
+    O[n].location.x += 150; O[n].location.z -= Z_SEAT
+shoot("02_open_case_fox_inside.png", (60, 50, 20), (0.7, -1.3, 1.1), dist=720, lens=50)
 
-# 3. FOX location in the base cradle (tray + lid removed)
+# 03 accessory tray installed (lid off)
+reset(); show(["Base", "Tray"] + fox + acc)
+shoot("03_tray_installed.png", (0, 0, Z_SEAT), (0.9, -1.3, 1.1), dist=480, lens=55)
+
+# 03b FOX in the cradle
 reset(); show(["Base"] + fox)
-shoot("03_fox_in_base_cradle.png", (0, 0, 18), (0.9, -1.4, 1.0), dist=380, lens=55)
-shoot("03b_fox_in_base_top.png", (0, 0, 0), (0, 0, 1), ortho=150, dist=400)
+shoot("03b_fox_in_cradle.png", (0, 0, 18), (0.9, -1.4, 1.0), dist=360, lens=55)
 
-# 4. accessory storage
-reset(); show(["Tray"] + acc)
-shoot("04_accessory_tray.png", (0, 0, 70), (0.6, -1.0, 1.6), dist=420, lens=55)
-
-# 5. exploded stack
+# 04 exploded: base -> FOX -> tray -> lid
 reset(); show(case + fox + acc)
-O["Lid"].location.z += 190
+O["PROXY_FOX"].location.z += 25; O["PROXY_FOX_SensorFace"].location.z += 25
 for n in ["Tray"] + acc:
-    O[n].location.z += 80
-shoot("05_exploded_stack.png", (0, 0, 165), (1.0, -1.3, 0.35), dist=860, lens=55)
+    O[n].location.z += 70
+O["Lid"].location.z += 140
+shoot("04_exploded_stack.png", (0, 0, 115), (1.0, -1.3, 0.35), dist=820, lens=55)
 
-# 6. section view (cut copies at the YZ... plane through the long axis, front half removed)
+# 05 section through the long axis: total stacked height
 reset()
-sec = []
-cutter = bpy.data.objects.new("DOC_cut", bpy.data.meshes.new("DOC_cut"))
-import bmesh
-bm = bmesh.new()
-bmesh.ops.create_cube(bm, size=1.0)
-bm.to_mesh(cutter.data); bm.free()
-cutter.scale = (400, 200, 400)
-cutter.location = (0, -100, 100)
-sc.collection.objects.link(cutter)
-bpy.context.view_layer.update()
-for n in case + fox + acc:
-    c = O[n].copy(); c.data = O[n].data.copy(); c.name = "DOC_sec_" + n
-    sc.collection.objects.link(c)
-    c.hide_viewport = False
-    m = c.modifiers.new("cut", "BOOLEAN"); m.operation = "DIFFERENCE"; m.solver = "EXACT"; m.object = cutter
-    bpy.context.view_layer.objects.active = c
-    bpy.ops.object.modifier_apply(modifier="cut")
-    c.color = COLORS[n]
-    sec.append(c.name)
-bpy.data.objects.remove(cutter, do_unlink=True)
+sec = cut_copies(case + fox + acc, (0, -100, 100), (400, 200, 400), "DOC_sec_")
 show(sec)
-shoot("06_section_long_axis.png", (0, 0, 57), (0, -1, 0), ortho=190, dist=500)
-shoot("06b_section_3q.png", (0, 0, 57), (0.7, -1.2, 0.5), dist=520, lens=55)
-for n in sec:
-    bpy.data.objects.remove(O[n], do_unlink=True)
+shoot("05_section_stack_height.png", (0, 0, Z_TOP / 2), (0, -1, 0), ortho=200, dist=500)
+shoot("05b_section_3q.png", (0, 0, Z_TOP / 2), (0.7, -1.2, 0.5), dist=460, lens=55)
+drop(sec)
 
-# 7. fit-test ring over the FOX
+# 06 top-down proof: the tray is ONE open bin, no divider
+reset(); show(["Tray"])
+shoot("06_tray_top_no_divider.png", (0, 0, Z_SEAT), (0, 0, 1), ortho=135, dist=400)
+show(["Tray"] + acc)
+shoot("06b_tray_top_with_charger_and_cable.png", (0, 0, Z_SEAT), (0, 0, 1), ortho=135, dist=400)
+
+# 07 lid retention: section through a snap tab (plane y = 0), close-up
+reset()
+tab = cut_copies(["Base", "Lid"], (0, -100, 100), (400, 200, 400), "DOC_tab_")
+show(tab)
+xl = B.get("OUT_L", 125.0) / 2
+shoot("07_snap_tab_section.png", (xl - 6, 0, Z_CRADLE + 8), (0, -1, 0), ortho=34, dist=300)
+drop(tab)
+show(["Lid"])
+shoot("07b_lid_underside_tabs.png", (0, 0, Z_TOP / 2), (0.8, -1.0, -0.9), dist=460, lens=55)
+
+# 08 fit-test ring (V3 cavity)
 reset(); show(["FitTest"] + fox)
-O["FitTest"].location = (0, 0, 2.4)
-shoot("07_fit_test_ring.png", (0, 0, 15), (0.9, -1.4, 1.1), dist=380, lens=55)
+O["FitTest"].location = (0, 0, B.get("FLOOR", 2.0))
+shoot("08_fit_test_ring_v3.png", (0, 0, 15), (0.9, -1.4, 1.1), dist=360, lens=55)
 
-# 8. the single A1 mini plate: base + lid with the tray nested inside it
+# 09 print plates (A1 mini 180 x 180): A = base + tray, B = lid upside down
 reset()
 bed = bpy.data.objects.new("DOC_bed", bpy.data.meshes.new("DOC_bed"))
 bm = bmesh.new(); bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=90); bm.to_mesh(bed.data); bm.free()
 sc.collection.objects.link(bed); bed.color = (0.62, 0.62, 0.60, 1)
-g = globals().get("BUILD", {})
-PB = g.get("PLATE_BASE_CENTER", (90, 135)); PL = g.get("PLATE_LID_CENTER", (90, 45))
-ZC = g.get("Z_CRADLE", 10.4); ZS = g.get("Z_SEAT", 38.9)
-place = {"Base": (PB[0] - 90, PB[1] - 90, 0), "Lid": (PL[0] - 90, PL[1] - 90, -ZC),
-         "Tray": (PL[0] - 90, PL[1] - 90, -ZS)}
-for n, loc in place.items():
-    O[n].location = loc
-show(["DOC_bed", "Base", "Lid", "Tray"])
-shoot("08_one_plate_A1mini.png", (0, 0, 40), (0.45, -0.9, 1.0), dist=700, lens=50)
-shoot("08b_one_plate_top.png", (0, 0, 0), (0, 0, 1), ortho=200, dist=600)
-
-# 9. print progress: the same plate cut at several heights (layers grow from the bed up)
-import bmesh as _bm
-frames = [2.4, 10.4, 41.4, 71.0, 105.0, 125.0]
-for k, h in enumerate(frames):
-    names = []
-    cut = bpy.data.objects.new("DOC_zcut", bpy.data.meshes.new("DOC_zcut"))
-    b = _bm.new(); _bm.ops.create_cube(b, size=1.0); b.to_mesh(cut.data); b.free()
-    cut.scale = (400, 400, 400); cut.location = (0, 0, h + 200)
-    sc.collection.objects.link(cut)
-    bpy.context.view_layer.update()   # make the cutter's transform live before applying
-    for n in ("Base", "Lid", "Tray"):
-        c = O[n].copy(); c.data = O[n].data.copy(); c.name = "DOC_p_" + n
-        sc.collection.objects.link(c)
-        c.hide_viewport = False   # modifier_apply silently fails on hidden objects
-        m = c.modifiers.new("cut", "BOOLEAN"); m.operation = "DIFFERENCE"; m.solver = "EXACT"; m.object = cut
-        bpy.context.view_layer.objects.active = c
-        bpy.ops.object.modifier_apply(modifier="cut")
-        c.color = COLORS[n]
-        names.append(c.name)
-    bpy.data.objects.remove(cut, do_unlink=True)
-    show(["DOC_bed"] + names)
-    shoot("09_print_progress_%d_z%03d.png" % (k + 1, round(h)), (0, 0, 35), (0.45, -0.9, 1.0), dist=700, lens=50)
-    for n in names:
-        bpy.data.objects.remove(O[n], do_unlink=True)
+TRAY_W, PG = B.get("TRAY_W", 74.0), B.get("PLATE_GAP", 8.0)
+O["Base"].location = (0, -(OUT_W + PG) / 2, 0)
+O["Tray"].location = (0, (TRAY_W + PG) / 2, -Z_SEAT)
+show(["DOC_bed", "Base", "Tray"])
+shoot("09_plate_A_base_and_tray.png", (0, 0, 20), (0.45, -0.9, 1.0), dist=620, lens=50)
+reset()
+O["Lid"].rotation_euler = (math.pi, 0, 0)
+O["Lid"].location = (0, 0, Z_TOP)
+show(["DOC_bed", "Lid"])
+shoot("09_plate_B_lid.png", (0, 0, 30), (0.45, -0.9, 1.0), dist=620, lens=50)
 bpy.data.objects.remove(bed, do_unlink=True)
 
-# restore scene for the saved .blend
 reset()
 show(PARTS)
-O["Lid"].hide_viewport = False
 print(sorted(os.listdir(OUT)))

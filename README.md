@@ -1,53 +1,60 @@
 # 3dmakerpro-fox-case
 
 A compact, rigid, 3D-printable carrying case for the **3DMakerpro FOX** scanner that keeps the
-scanner **and** its charger and cable together. Pick up one case and you have everything.
+scanner, its **cable and its charger** together. Pick up one case and you have everything.
 
-**The whole case prints in one job on one Bambu A1 mini plate, with no supports.**
-
-| Closed | One A1 mini plate | Layer by layer |
+| Closed | Section | Tray: one open bin |
 |---|---|---|
-| ![closed](renders/01_closed_case.png) | ![plate](renders/08_one_plate_A1mini.png) | ![progress](renders/09_print_progress_sheet.png) |
+| ![closed](renders/01_closed_case.png) | ![section](renders/05_section_stack_height.png) | ![tray](renders/06_tray_top_no_divider.png) |
 
-## Status: V2 modelled, validated in CAD, not yet printed
+## Status: V3 modelled and validated in CAD; FOX cavity physically fit-tested (V2 ring)
 
-* **Stacked layout:** base with a shallow FOX cradle → accessory tray → lid.
-* **Outside size:** 125 × 82 × 130.5 mm.
-* **Scanner cavity:** 115.5 × 72.5 mm (R 5.25). Clearance is 1.25 mm per side and 1.5 mm above.
-  Both long sides are open above an 8 mm cradle so you can grip the FOX.
-* **Accessory tray:** 538.7 cm³, which matches the original black accessory box.
-* **Printing:** the lid prints mouth-down with a self-supporting 45° roof and a 40 mm bridge. That
-  frees the bed inside it, so **the tray prints nested inside the lid**. Plate = base + (lid with tray).
-* Watertight meshes, no clashes, and support-free. See [`docs/design.md`](docs/design.md) for the
-  build-up order, slicer settings (per-object brim, **no auto-arrange**) and validation.
+| | V3 |
+|---|---|
+| **Outside** | **125.0 × 82.5 × 99.1 mm** (31.4 mm lower than V2) |
+| **FOX cavity** | **115.5 × 73.0 mm** (R 5.25), from the printed fit test; 36.5 mm vertical space |
+| **Accessory tray** | **112.5 × 70.0 × 56 mm inside, one open bin, no divider** |
+| **Lid** | slip-over sleeve with **2 snap tabs** that click into the base |
+| **Print** | **2 jobs, no supports**: A = base + tray, B = lid (upside down) |
+| **Material** | ≈ 195–225 g PLA (249 g solid-equivalent) |
 
-**Print this first:** [`exports/fox_fit_test_cradle_ring.stl`](exports/fox_fit_test_cradle_ring.stl)
-(~9 g). It checks the FOX cavity before the long print. Then print
-[`exports/fox_case_A1mini_one_plate.3mf`](exports/fox_case_A1mini_one_plate.3mf).
+Stacked, bottom to top: **base** with a shallow FOX cradle (finger access on both long sides) →
+**FOX** → **open accessory tray** (charger + freely coiled cable) → **lid**.
+Details, height budget, validation and test plan: [`docs/design.md`](docs/design.md).
+
+## Print
+
+1. `exports/fox_case_v3_plate_A_base_and_tray.3mf`: base and tray, both upright.
+2. `exports/fox_case_v3_plate_B_lid.3mf`: lid, upside down.
+3. Optional: `exports/fox_fit_test_cradle_ring_v3.stl` (~9 g) to confirm the new 73.0 mm width.
+
+Settings: 0.2 mm layers, 3 walls, 15 % infill, supports off, no brim needed.
 
 ## Files
 
 | Path | Contents |
 |---|---|
-| `scripts/build_fox_case.py` | Parametric build: named parameters; builds parts, validates, exports STL and 3MF, saves the .blend |
-| `scripts/render_views.py` | Documentation renders, including the plate and print-progress views |
+| `scripts/build_fox_case.py` | Parametric build: named parameters; builds, validates, exports STL/3MF, saves the .blend |
+| `scripts/render_views.py` / `scripts/run_all.py` | Documentation renders / full build + render pipeline |
+| `scripts/annotate_renders.py` | Stamps final dimensions onto the renders |
 | `cad/fox_case.blend` | Editable Blender source |
-| `exports/fox_case_A1mini_one_plate.3mf` / `.stl` | **The whole case, pre-arranged on one A1 mini plate** |
-| `exports/fox_case_{base,accessory_tray,lid}.stl` | Individual parts in print orientation |
-| `exports/fox_fit_test_cradle_ring.stl` | Cheap cavity fit test |
-| `exports/validation_report.json` | Parameters, dimensions, mesh, support, plate and assembly checks |
-| `renders/` | Closed, open, cradle, tray, exploded, section, fit-test, plate and print-progress views |
-| `docs/design.md` | Evidence, layout study, print strategy, dimensions, uncertainties, test plan |
-| `reference/` | Your photos, the third-party stand STL and its screenshot (unaltered) |
+| `exports/fox_case_v3_{base,accessory_tray,lid}.stl` | Parts in print orientation |
+| `exports/fox_case_v3_plate_*.3mf` / `fox_case_v3_assembled.3mf` | Print plates / assembled model |
+| `exports/validation_report.json` | Parameters, dimensions, mesh, support, retention, assembly checks |
+| `renders/` | Closed, open, tray installed, exploded, section, no-divider proof, snap tab, plates |
+| `docs/design.md` | Evidence, height budget, architecture, retention, printing, validation, test plan |
+| `archive/v2/` | V2 printable files and renders (V1/V2 also tagged in git) |
+| `reference/` | Original photos, third-party stand STL and screenshot (unaltered) |
 
 ## Rebuild after changing a parameter
 
 ```bash
-/Applications/Blender.app/Contents/MacOS/Blender -b --python scripts/build_fox_case.py
+/Applications/Blender.app/Contents/MacOS/Blender -b cad/fox_case.blend --python scripts/run_all.py
 ```
 
-Or run `exec(open("scripts/build_fox_case.py").read())` in Blender (or through the Blender MCP),
-then `scripts/render_views.py` for the images.
+```bash
+uv run --with pillow python scripts/annotate_renders.py
+```
 
-The third-party stand in `reference/third_party/` (MakerWorld, "Tacco25") is used only as
-measurement evidence. None of its geometry is copied into this case.
+Key parameters: `FOX_CAVITY_LENGTH/WIDTH`, `FOX_INTERNAL_HEIGHT`, `ACCESSORY_TRAY_HEIGHT`, `WALL`,
+`FLOOR`, `LID_CLEARANCE`, `TRAY_CLEARANCE`, `LID_RETENTION`. `TOTAL_CASE_HEIGHT` is derived from them.
